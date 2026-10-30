@@ -1,0 +1,8 @@
+category,word,normalized_word,rarity_score,verified,source
+Name,Example,example,50,false,Add a documented dictionary/frequency source
+Object,Example object,example object,50,false,Add a documented dictionary/frequency source
+City,Example city,example city,50,false,Add a documented gazetteer source
+Animal,Example animal,example animal,50,false,Add a documented taxonomy source
+Profession,Example profession,example profession,50,false,Add a documented occupational source
+Food,Example food,example food,50,false,Add a documented food lexicon source
+Character,Example character,example character,50,false,Add a documented reference source
