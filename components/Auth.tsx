@@ -14,6 +14,7 @@ export default function Auth({ onSessionChange }: Props) {
   const [supabase] = useState(() => createClient());
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [username, setUsername] = useState("");
   const [mode, setMode] = useState<"login" | "signup">("login");
   const [message, setMessage] = useState("");
   const [busy, setBusy] = useState(false);
@@ -41,14 +42,55 @@ export default function Auth({ onSessionChange }: Props) {
 
     try {
       if (mode === "signup") {
+        const cleanUsername = username.trim();
+
+        if (!/^[a-zA-Z0-9_]{3,20}$/.test(cleanUsername)) {
+          throw new Error(
+            "Username must be 3–20 characters and contain only letters, numbers or underscores."
+          );
+        }
+
+        // Check username availability before creating the account.
+        const { data: available, error: checkError } =
+          await supabase.rpc("is_username_available", {
+            p_username: cleanUsername,
+          });
+
+        if (checkError) throw checkError;
+
+        if (!available) {
+          throw new Error(
+            "Username already taken. Choose another one."
+          );
+        }
+
         const { error } = await supabase.auth.signUp({
           email,
           password,
+          options: {
+            data: {
+              username: cleanUsername,
+            },
+          },
         });
 
-        if (error) throw error;
+        if (error) {
+          if (
+            error.message.toLowerCase().includes("username") ||
+            error.message.toLowerCase().includes("duplicate") ||
+            error.code === "23505"
+          ) {
+            throw new Error(
+              "Username already taken. Choose another one."
+            );
+          }
 
-        setMessage("Account created. Check your email for confirmation.");
+          throw error;
+        }
+
+        setMessage(
+          "Account created. Check your email for confirmation."
+        );
       } else {
         const { error } = await supabase.auth.signInWithPassword({
           email,
@@ -61,7 +103,9 @@ export default function Auth({ onSessionChange }: Props) {
       }
     } catch (error) {
       setMessage(
-        error instanceof Error ? error.message : "Something went wrong."
+        error instanceof Error
+          ? error.message
+          : "Something went wrong."
       );
     } finally {
       setBusy(false);
@@ -80,6 +124,26 @@ export default function Auth({ onSessionChange }: Props) {
       <h2>{mode === "login" ? "Sign in" : "Create account"}</h2>
 
       <form onSubmit={handleSubmit}>
+        {mode === "signup" && (
+          <div className="field">
+            <label htmlFor="auth-username">USERNAME</label>
+            <input
+              id="auth-username"
+              type="text"
+              value={username}
+              onChange={(e) => setUsername(e.target.value)}
+              required
+              minLength={3}
+              maxLength={20}
+              autoComplete="username"
+              placeholder="Choose your username"
+            />
+            <p className="muted">
+              3–20 characters. Letters, numbers and underscores only.
+            </p>
+          </div>
+        )}
+
         <div className="field">
           <label htmlFor="auth-email">EMAIL</label>
           <input
@@ -103,7 +167,9 @@ export default function Auth({ onSessionChange }: Props) {
             required
             minLength={6}
             autoComplete={
-              mode === "login" ? "current-password" : "new-password"
+              mode === "login"
+                ? "current-password"
+                : "new-password"
             }
             placeholder="At least 6 characters"
           />
@@ -139,7 +205,11 @@ export default function Auth({ onSessionChange }: Props) {
         Sign out
       </button>
 
-      {message && <p className="status" role="status">{message}</p>}
+      {message && (
+        <p className="status" role="status">
+          {message}
+        </p>
+      )}
 
       <p className="muted">
         You can play Tressle without creating an account.

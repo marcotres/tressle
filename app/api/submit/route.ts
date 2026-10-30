@@ -121,7 +121,22 @@ export async function POST(req: NextRequest) {
       });
     }
 
-    // Find or create the player's public profile.
+    // Get the username selected during registration.
+    const selectedUsername = String(
+      user.user_metadata?.username || ""
+    ).trim();
+
+    if (
+      selectedUsername &&
+      !/^[a-zA-Z0-9_]{3,20}$/.test(selectedUsername)
+    ) {
+      return NextResponse.json(
+        { error: "Invalid username. Please update your account." },
+        { status: 400 }
+      );
+    }
+
+    // Find the player's public profile.
     let { data: profile, error: profileError } = await db
       .from("profiles")
       .select("username")
@@ -131,7 +146,9 @@ export async function POST(req: NextRequest) {
     if (profileError) throw profileError;
 
     if (!profile) {
-      const username = `player_${user.id.replace(/-/g, "").slice(0, 8)}`;
+      const username =
+        selectedUsername ||
+        `player_${user.id.replace(/-/g, "").slice(0, 8)}`;
 
       const { data, error } = await db
         .from("profiles")
@@ -142,7 +159,37 @@ export async function POST(req: NextRequest) {
         .select("username")
         .single();
 
-      if (error) throw error;
+      if (error) {
+        if (error.code === "23505") {
+          return NextResponse.json(
+            { error: "This username is already taken. Please choose another." },
+            { status: 409 }
+          );
+        }
+        throw error;
+      }
+
+      profile = data;
+    } else if (
+      selectedUsername &&
+      profile.username.startsWith("player_")
+    ) {
+      const { data, error } = await db
+        .from("profiles")
+        .update({ username: selectedUsername })
+        .eq("id", user.id)
+        .select("username")
+        .single();
+
+      if (error) {
+        if (error.code === "23505") {
+          return NextResponse.json(
+            { error: "This username is already taken. Please choose another." },
+            { status: 409 }
+          );
+        }
+        throw error;
+      }
 
       profile = data;
     }
@@ -170,6 +217,7 @@ export async function POST(req: NextRequest) {
       total,
       results,
       saved: true,
+      username: profile.username,
     });
   } catch (e) {
     console.error("Submission error:", e);
