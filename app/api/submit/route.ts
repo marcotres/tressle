@@ -1,4 +1,3 @@
-
 import { NextRequest, NextResponse } from "next/server";
 import { adminDb } from "@/lib/supabase-admin";
 import { getDailyChallenge } from "@/lib/daily";
@@ -12,6 +11,16 @@ const CATEGORIES = [
   "Food",
   "Character",
 ];
+
+function calculatePoints(rarity: number): number {
+  if (rarity >= 91) return 1000;
+  if (rarity >= 81) return 700;
+  if (rarity >= 61) return 400;
+  if (rarity >= 41) return 200;
+  if (rarity >= 21) return 100;
+  if (rarity >= 1) return 50;
+  return 0;
+}
 
 export async function POST(req: NextRequest) {
   try {
@@ -49,7 +58,7 @@ export async function POST(req: NextRequest) {
       user = data.user;
     }
 
-    // Calculate the score using verified words only.
+    // Calculate points using verified words and their rarity.
     const results = [];
     let total = 0;
 
@@ -88,7 +97,7 @@ export async function POST(req: NextRequest) {
 
       const { data, error } = await db
         .from("words")
-        .select("rarity_score")
+        .select("rarity")
         .eq("category", category)
         .eq("normalized_word", normalized)
         .eq("verified", true)
@@ -96,15 +105,21 @@ export async function POST(req: NextRequest) {
 
       if (error) throw error;
 
-      const score = data?.rarity_score ?? 0;
-      const valid = !!data;
+      const rarity = data?.rarity ?? 0;
+      const valid =
+        !!data &&
+        Number.isInteger(rarity) &&
+        rarity >= 1 &&
+        rarity <= 100;
+
+      const score = valid ? calculatePoints(rarity) : 0;
 
       results.push({
         category,
         answer,
         score,
         valid,
-        rarity: score,
+        rarity: valid ? rarity : 0,
       });
 
       total += score;
@@ -162,10 +177,14 @@ export async function POST(req: NextRequest) {
       if (error) {
         if (error.code === "23505") {
           return NextResponse.json(
-            { error: "This username is already taken. Please choose another." },
+            {
+              error:
+                "This username is already taken. Please choose another.",
+            },
             { status: 409 }
           );
         }
+
         throw error;
       }
 
@@ -184,10 +203,14 @@ export async function POST(req: NextRequest) {
       if (error) {
         if (error.code === "23505") {
           return NextResponse.json(
-            { error: "This username is already taken. Please choose another." },
+            {
+              error:
+                "This username is already taken. Please choose another.",
+            },
             { status: 409 }
           );
         }
+
         throw error;
       }
 
